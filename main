@@ -1,0 +1,99 @@
+from aiogram.contrib.fsm_storage.memory import MemoryStorage
+from pycoingecko import CoinGeckoAPI
+
+from aiogram import Bot, types
+from aiogram.dispatcher import Dispatcher, FSMContext
+from aiogram.utils import executor, exceptions
+from sql_bd import Database
+from aiogram.dispatcher.filters.state import StatesGroup, State
+import config
+import logging
+import markups as mp
+
+logging.basicConfig(level=logging.INFO)
+
+bot = Bot(token=config.TOKEN)
+dp = Dispatcher(bot, storage=MemoryStorage())
+db = Database('order.db')
+
+
+
+
+
+markdown = """
+*bold text*
+_italic text_
+[text](URL)
+"""
+
+
+
+
+#подключение
+async def startup(_):
+    print('Бот подключен')
+    
+    
+@dp.message_handler(commands=['start'])
+async def start(message: types.Message):
+    if not db.examination(message.from_user.id):
+        db.add(message.from_user.id)
+    await message.answer('Привет\n'
+                         'Заполни анкету',reply_markup=mp.hi_menu)
+
+class anketa(StatesGroup):
+    shop = State()
+    name = State()
+    number = State()
+
+
+@dp.message_handler(text=['ЗАПОЛНИТЬ АНКЕТУ'])
+async def start_anketa(message: types.Message):
+    await message.answer('Введите название вашего магазина')
+    await anketa.shop.set()
+
+@dp.message_handler(text=['ЗАПОЛНИТЬ АНКЕТУ'])
+async def start_anketa(message: types.Message):
+    await message.answer('Введите название вашего магазина')
+    await anketa.shop.set()
+
+@dp.message_handler(state=anketa.shop)
+async def shop_anketa(message: types.Message):
+    db.add_shop(message.from_user.id, message.text)
+    await message.answer('Введите свое имя')
+    await anketa.name.set()
+
+@dp.message_handler(state=anketa.name)
+async def name_anketa(message: types.Message):
+    db.add_name(message.from_user.id, message.text)
+    await message.answer('Введите свой номер телефона')
+    await anketa.number.set()
+
+@dp.message_handler(state=anketa.number)
+async def name_number(message: types.Message, state: FSMContext):
+    db.add_number(message.from_user.id, message.text)
+    await message.answer('Вы прошли анкету', reply_markup=mp.look_menu)
+    await state.finish()
+
+
+@dp.message_handler(text=['ПОСМОТРЕТЬ АНКЕТУ'])
+async def look(message: types.Message):
+    id_user = message.from_user.url
+    shop = db.user_shop(message.from_user.id)
+    name = db.user_name(message.from_user.id)
+    number = db.user_number(message.from_user.id)
+    await bot.send_message(message.from_user.id, 'Анкета пользователя: [{} {}](tg://user?id={})'.format(message.from_user.first_name, message.from_user.last_name, message.from_user.id), disable_web_page_preview=True, parse_mode="Markdown")
+    await bot.send_message(message.from_user.id,
+                         f'Магазин: {shop}\n'
+                         f'Имя: {name}\n'
+                         f'Номер телефона: {number}')
+
+    await bot.send_message(955661236, 'Анкета пользователя: [{} {}](tg://user?id={})'.format(message.from_user.first_name, message.from_user.last_name, message.from_user.id), disable_web_page_preview=True, parse_mode="Markdown")
+    await bot.send_message(955661236,
+                         f'Магазин: {shop}\n'
+                         f'Имя: {name}\n'
+                         f'Номер телефона: {number}')
+
+
+if __name__=="__main__":
+    executor.start_polling(dp, skip_updates=False, on_startup=startup)
